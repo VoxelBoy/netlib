@@ -1,0 +1,26 @@
+name: Self-hosted signaling
+
+on:
+  push:
+    branches: [codex/selfhost]
+  pull_request:
+    branches: [codex/selfhost]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Check formatting of downstream Go files
+        run: test -z "$(gofmt -l internal/cloudflare/credentials*.go internal/cloudflare/types.go internal/selfhost*.go internal/signaling/handler.go internal/signaling/peer.go cmd/signaling/main.go)"
+      - run: go test -race ./...
+      - name: Build the self-hosted image without publishing
+        run: docker build -f Dockerfile.selfhost --build-arg VCS_REF=${{ github.sha }} -t netlib-selfhost:check .

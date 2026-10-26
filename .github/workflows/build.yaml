@@ -8,6 +8,7 @@ on:
 
 jobs:
   test:
+    if: github.repository == 'poki/netlib'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -24,6 +25,7 @@ jobs:
       env:
         DOCKER_HOST: unix:///var/run/docker.sock
   golangci-lint:
+    if: github.repository == 'poki/netlib'
     name: golangci-lint
     runs-on: ubuntu-latest
     steps:
@@ -36,6 +38,7 @@ jobs:
       with:
         version: v2.15.0
   build:
+    if: github.repository == 'poki/netlib'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -65,7 +68,7 @@ jobs:
     - test
     - golangci-lint
     timeout-minutes: 30
-    if: github.ref == 'refs/heads/main'
+    if: github.repository == 'poki/netlib' && github.ref == 'refs/heads/main'
     steps:
     - uses: actions/checkout@v7
     - name: GCP auth

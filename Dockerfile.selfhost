@@ -1,0 +1,14 @@
+FROM golang:1.27.3-alpine@sha256:f2c872bcee949b7be9c490efd02b48a8a2fbf947cdf533f1c58525ec9d8170fd AS build
+WORKDIR /src
+ENV GOMAXPROCS=2 GOFLAGS=-p=2
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN test -z "$(gofmt -l internal/cloudflare/credentials*.go internal/cloudflare/types.go internal/selfhost*.go internal/signaling/handler.go internal/signaling/peer.go cmd/signaling/main.go)" && go test ./... && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /signaling ./cmd/signaling
+FROM scratch
+ARG VCS_REF
+LABEL org.opencontainers.image.source="https://github.com/VoxelBoy/netlib" \
+      org.opencontainers.image.revision=$VCS_REF
+COPY --from=build /signaling /signaling
+USER 65532:65532
+ENTRYPOINT ["/signaling"]

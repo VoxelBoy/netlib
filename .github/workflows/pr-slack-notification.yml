@@ -10,7 +10,7 @@ permissions:
 jobs:
   notify-slack:
     name: Send
-    if: ${{ !github.event.pull_request.draft }}
+    if: ${{ github.repository == 'poki/netlib' && !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

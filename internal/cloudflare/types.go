@@ -3,7 +3,7 @@ package cloudflare
 import "strings"
 
 type Credentials struct {
-	URL        string `json:"url"`
+	URL        any    `json:"url"`
 	Username   string `json:"username"`
 	Credential string `json:"credential"`
 	Lifetime   int    `json:"lifetime"`

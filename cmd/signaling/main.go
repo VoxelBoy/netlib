@@ -48,7 +48,7 @@ func main() {
 	mux, cleanup := internal.Signaling(ctx, store, credentialsClient)
 
 	corsHandler := cors.Default()
-	handler := corsHandler.Handler(mux)
+	handler := internal.SelfhostGuard(corsHandler.Handler(mux))
 	handler = util.NoStoreMiddleware(handler)
 	handler = util.NoLogServedMiddleware(handler)
 	handler = logging.Middleware(handler, logger)

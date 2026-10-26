@@ -189,7 +189,7 @@ func (p *Peer) HandleHelloPacket(ctx context.Context, packet HelloPacket) error 
 	if p.Game != "" {
 		return fmt.Errorf("already introduced %s for game %s", p.ID, p.Game)
 	}
-	if !util.IsUUID(packet.Game) {
+	if packet.Game != "5e114f47-b4d8-4136-96ed-ddba5af13597" || !util.IsUUID(packet.Game) {
 		return fmt.Errorf("no game id supplied")
 	}
 

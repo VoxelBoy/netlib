@@ -156,12 +156,22 @@ func Handler(ctx context.Context, store stores.Store, cloudflare *cloudflare.Cre
 			}
 		}()
 
+		packetWindow := time.Now()
+		packetCount := 0
 		for ctx.Err() == nil {
 			var raw []byte
 			if _, raw, err = conn.Read(ctx); err != nil {
 				util.ErrorAndDisconnect(ctx, conn, err)
 			}
 
+			if time.Since(packetWindow) >= time.Second {
+				packetWindow = time.Now()
+				packetCount = 0
+			}
+			packetCount++
+			if packetCount > 120 {
+				return
+			}
 			base := struct {
 				Type      string `json:"type"`
 				RequestID string `json:"rid"`
@@ -186,6 +196,9 @@ func Handler(ctx context.Context, store stores.Store, cloudflare *cloudflare.Cre
 
 			switch base.Type {
 			case "credentials":
+				if peer.ID == "" {
+					return
+				}
 				credentials, err := cloudflare.GetCredentials(reqCtx)
 				if err != nil {
 					util.ReplyError(reqCtx, conn, err)
@@ -219,7 +232,7 @@ func Handler(ctx context.Context, store stores.Store, cloudflare *cloudflare.Cre
 					}
 				}
 
-				go metrics.RecordEvent(reqCtx, params)
+				// Self-hosted service discards client analytics.
 
 			case "ping", "pong":
 				// ignore, ping/pong is just for the tcp keepalive.

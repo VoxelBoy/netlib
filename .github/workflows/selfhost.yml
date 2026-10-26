@@ -11,6 +11,19 @@ permissions:
   contents: read
 
 jobs:
+  browser-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install and prepare the Git dependency
+        run: npm ci
+      - name: Verify both browser bundles and declarations
+        run: test -s dist/netlib.js && test -s dist/legacy.js && test -s dist/index.d.ts
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 20

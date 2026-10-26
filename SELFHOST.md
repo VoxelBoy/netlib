@@ -1,8 +1,12 @@
 # Self-hosted signaling downstream
 
 This is VoxelBoy's small server fork of [poki/netlib](https://github.com/poki/netlib).
-The upstream ISC license and Go module path are retained. The browser client is
-unchanged; the game continues to consume the official `@poki/netlib` npm package.
+The upstream ISC license, Go module path and `@poki/netlib` package name are
+retained. The browser client source is unchanged; the game consumes this fork
+directly through a Git dependency pinned to an immutable commit. `prepare` uses
+`npm run build`, so a Git install produces the main bundle, type declarations and
+legacy browser bundle without a global Yarn installation. The committed npm lock
+pins the build dependencies; the upstream Yarn lock is retained for merging.
 
 ## Branches and patches
 
@@ -22,7 +26,8 @@ signaling listener must not be directly exposed.
 
 The game repository owns host configuration, compose, coturn, deployment, rollback,
 browser/device probes and the exact fork revision it consumes. Its preparation
-script checks out that immutable commit, with no source overlays.
+script checks out that immutable commit, with no source overlays. Keep its server
+revision and the game's npm dependency/lockfile on the same reviewed fork commit.
 
 ## Review an upstream update
 
@@ -50,11 +55,12 @@ image build:
 
 ```sh
 go test -race ./...
+npm ci
 docker build -f Dockerfile.selfhost --build-arg VCS_REF="$(git rev-parse HEAD)" -t netlib-selfhost:check .
 ```
 
 Push the downstream branch and confirm the `Self-hosted signaling` workflow passes.
-Only then update the game's pinned fork commit. Before a deployment, run its
+Only then update the game's pinned server and npm fork commits together. Before a deployment, run its
 credential rejection, origin/packet limits, relay privacy, reconnect, restart,
 reliable/unreliable delivery and multiplayer probes in the isolated test setup.
 Carrier, Safari and portal iframe checks remain separate device/platform gates.

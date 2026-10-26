@@ -30,7 +30,7 @@
     "dist/*"
   ],
   "scripts": {
-    "prepare": "yarn build",
+    "prepare": "npm run build",
     "build": "parcel build",
     "lint": "ts-standard --fix",
     "cucumber": "cucumber-js --require 'features/support/**/*.ts' --require-module ts-node/register --order random --retry 2 --retry-tag-filter flakey",

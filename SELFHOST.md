@@ -12,7 +12,7 @@ pins the build dependencies; the upstream Yarn lock is retained for merging.
 
 - `main` mirrors upstream `main`, without downstream patches.
 - `codex/selfhost` is the default branch and carries the server adaptations.
-- Current upstream base: `386f2ed2602b8d64d46ff06de8ef90ffcdedd9f8` (2026-10-24).
+- Current upstream base: `7c87feaaaba736f8f3963db4e6461c2e17a43bb9` (2026-11-02).
 
 The downstream commits replace Cloudflare credential generation with local coturn
 TURN REST credentials, allow an array of TURN URLs, restrict signaling to the game's

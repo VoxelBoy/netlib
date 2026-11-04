@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"math/rand"
 	"os"
 	"regexp"
@@ -276,6 +277,116 @@ func (s *PostgresStore) JoinLobby(ctx context.Context, game, lobbyCode, peerID, 
 	return peerlist, nil
 }
 
+func (s *PostgresStore) JoinOrCreateLobby(ctx context.Context, game, peerID, country, region, lobbyFilter, codeFormat string, options LobbyOptions) (string, []string, bool, error) {
+	if len(peerID) > 20 {
+		return "", nil, false, ErrInvalidPeerID
+	}
+
+	if lobbyFilter == "" {
+		lobbyFilter = "{}"
+	}
+	where, values, err := s.filterConverter.Convert([]byte(lobbyFilter), 5)
+	if err != nil {
+		return "", nil, false, fmt.Errorf("invalid filter: %w", err)
+	}
+
+	tx, err := s.DB.Begin(ctx)
+	if err != nil {
+		return "", nil, false, err
+	}
+	defer tx.Rollback(context.Background()) //nolint:errcheck
+
+	h := fnv.New64a()
+	_, _ = h.Write([]byte(game))
+	hash := int64(h.Sum64())
+
+	// Lock the game before looking for a lobby, including when none exists yet.
+	//
+	// The SELECT FOR UPDATE below will only lock an existing lobby row, it won't help us
+	// with the race condition where 2 players both don't find a lobby and try to create one simultaneously.
+	//
+	// pg_advisory_xact_lock automatically releases the lock at the end of the transaction.
+	_, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, hash)
+	if err != nil {
+		return "", nil, false, err
+	}
+
+	var lobbyCode string
+	var peerlist []string
+	now := util.NowUTC(ctx)
+	err = tx.QueryRow(ctx, `
+		SELECT code, peers
+		FROM (
+			SELECT *,
+				COALESCE(ARRAY_LENGTH(peers, 1), 0) AS "playerCount",
+				created_at AS "createdAt",
+				updated_at AS "updatedAt",
+				lobby_latency_estimate(peers, $2, $3) AS latency
+			FROM lobbies
+			WHERE game = $1
+		) AS game_lobbies
+		WHERE public = true
+		AND password IS NULL
+		AND COALESCE(ARRAY_LENGTH(peers, 1), 0) > 0
+		AND (max_players = 0 OR ARRAY_LENGTH(peers, 1) < max_players)
+		AND EXISTS (
+			SELECT 1 FROM peers p
+			WHERE p.game = $1 AND p.peer = ANY(game_lobbies.peers)
+			AND p.disconnected = FALSE AND p.last_seen >= $4
+		)
+		AND (`+where+`)
+		ORDER BY RANDOM()
+		LIMIT 1
+		FOR UPDATE
+	`, append([]any{game, country, region, now.Add(-DefaultPeerTimeout)}, values...)...).Scan(&lobbyCode, &peerlist)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return "", nil, false, err
+	}
+
+	exists := !errors.Is(err, pgx.ErrNoRows)
+	if !exists {
+		for attempts := range 20 {
+			lobbyCode = util.GenerateLobbyCodeWithFormat(ctx, codeFormat, attempts)
+			res, err := tx.Exec(ctx, `
+				INSERT INTO lobbies (code, game, peers, public, created_at, updated_at, leader, term, can_update_by, creator, max_players, custom_data)
+				VALUES ($1, $2, $3, true, $4, $4, $5, 1, $6, $5, $7, $8)
+				ON CONFLICT DO NOTHING
+			`, lobbyCode, game, []string{peerID}, now, peerID, options.CanUpdateBy, options.MaxPlayers, options.CustomData)
+			if err != nil {
+				return "", nil, false, err
+			}
+			if res.RowsAffected() > 0 {
+				break
+			}
+			if attempts == 19 {
+				return "", nil, false, ErrLobbyExists
+			}
+		}
+	} else {
+		if slices.Contains(peerlist, peerID) {
+			return "", nil, false, ErrAlreadyInLobby
+		}
+
+		_, err = tx.Exec(ctx, `
+			UPDATE lobbies
+			SET
+				peers = array_append(peers, $1),
+				updated_at = $2
+			WHERE code = $3
+			AND game = $4
+		`, peerID, now, lobbyCode, game)
+		if err != nil {
+			return "", nil, false, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", nil, false, err
+	}
+
+	return lobbyCode, peerlist, !exists, nil
+}
+
 func (s *PostgresStore) LeaveLobby(ctx context.Context, game, lobbyCode, peerID string) error {
 	now := util.NowUTC(ctx)
 
@@ -322,6 +433,34 @@ func (s *PostgresStore) GetLobby(ctx context.Context, game, lobbyCode string) (L
 	}
 	sort.Strings(lobby.Peers)
 	return lobby, nil
+}
+
+func (s *PostgresStore) GetPlayerCounts(ctx context.Context, game, country, region, filter string) (PlayerCounts, error) {
+	var counts PlayerCounts
+	if filter == "" {
+		filter = "{}"
+	}
+	where, values, err := s.filterConverter.Convert([]byte(filter), 4)
+	if err != nil {
+		return counts, fmt.Errorf("invalid filter: %w", err)
+	}
+	err = s.DB.QueryRow(ctx, `
+		WITH game_lobbies AS (
+			SELECT code, peers, custom_data,
+				COALESCE(ARRAY_LENGTH(peers, 1), 0) AS "playerCount",
+				created_at AS "createdAt", updated_at AS "updatedAt",
+				lobby_latency_estimate(peers, $2, $3) AS latency
+			FROM lobbies
+			WHERE game = $1
+		)
+		SELECT COUNT(*), COUNT(*) FILTER (WHERE EXISTS (
+			SELECT 1 FROM game_lobbies
+			WHERE peers.peer = ANY(game_lobbies.peers) AND (`+where+`)
+		))
+		FROM peers
+		WHERE game = $1 AND disconnected = FALSE
+	`, append([]any{game, country, region}, values...)...).Scan(&counts.Online, &counts.InLobby)
+	return counts, err
 }
 
 func (s *PostgresStore) ListLobbies(ctx context.Context, game string, country, region string, filter, sort string, limit int) ([]Lobby, error) {

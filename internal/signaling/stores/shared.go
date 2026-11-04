@@ -14,6 +14,8 @@ var ErrInvalidPeerID = errors.New("invalid peer id")
 var ErrInvalidPassword = errors.New("invalid password")
 var ErrLobbyIsFull = errors.New("lobby is full")
 
+const DefaultPeerTimeout = 90 * time.Second
+
 type SubscriptionCallback func(context.Context, []byte)
 
 type LobbyOptions struct {
@@ -25,8 +27,10 @@ type LobbyOptions struct {
 }
 
 type Store interface {
+	GetPlayerCounts(ctx context.Context, game, country, region, filter string) (PlayerCounts, error)
 	CreateLobby(ctx context.Context, Game, LobbyCode, PeerID string, options LobbyOptions) error
 	JoinLobby(ctx context.Context, game, lobby, id, password string) ([]string, error)
+	JoinOrCreateLobby(ctx context.Context, game, peerID, country, region, lobbyFilter, codeFormat string, options LobbyOptions) (string, []string, bool, error)
 	LeaveLobby(ctx context.Context, game, lobby, id string) error
 	GetLobby(ctx context.Context, game, lobby string) (Lobby, error)
 	ListLobbies(ctx context.Context, game string, country, region string, filter, sort string, limit int) ([]Lobby, error)
@@ -87,4 +91,9 @@ type ElectionResult struct {
 type TimedOutPeer struct {
 	ID          string
 	GameLobbies map[string][]string
+}
+
+type PlayerCounts struct {
+	Online  int `json:"online"`
+	InLobby int `json:"inLobby"`
 }

@@ -16,6 +16,10 @@ export interface LobbySettings {
   canUpdateBy?: 'creator' | 'leader' | 'anyone' | 'none'
 }
 
+export interface JoinOrCreateSettings extends Omit<LobbySettings, 'public' | 'password'> {
+  filter?: object // MongoDB-style filter on existing lobbies, with the same fields as list().
+}
+
 export interface LobbyListEntry {
   code: string
   public: boolean
@@ -28,6 +32,11 @@ export interface LobbyListEntry {
   createdAt: string
   updatedAt: string
   latency?: number
+}
+
+export interface PlayerCounts {
+  online: number
+  inLobby: number
 }
 
 interface Base {
@@ -57,7 +66,10 @@ export type SignalingPacketTypes =
 | LeftPacket
 | ListPacket
 | LobbiesPacket
+| GetPlayerCountsPacket
+| PlayerCountsPacket
 | PingPacket
+| JoinOrCreatePacket
 | WelcomePacket
 
 export interface PingPacket extends Base {
@@ -106,6 +118,11 @@ export interface JoinPacket extends Base {
   type: 'join'
   lobby: string
   password?: string
+}
+
+export interface JoinOrCreatePacket extends Base, Omit<JoinOrCreateSettings, 'filter'> {
+  type: 'joinOrCreate'
+  filter?: string
 }
 
 export interface JoinedPacket extends Base {
@@ -201,4 +218,14 @@ export interface EventPacket extends Base {
   lobby?: string
 
   data?: { [key: string]: string }
+}
+
+export interface GetPlayerCountsPacket extends Base {
+  type: 'getPlayerCounts'
+  filter?: string
+}
+
+export interface PlayerCountsPacket extends Base {
+  type: 'playerCounts'
+  counts: PlayerCounts
 }

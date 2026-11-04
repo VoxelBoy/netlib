@@ -44,6 +44,19 @@ type LobbiesPacket struct {
 	Lobbies []stores.Lobby `json:"lobbies"`
 }
 
+type GetPlayerCountsPacket struct {
+	Filter    string `json:"filter"`
+	RequestID string `json:"rid"`
+	Type      string `json:"type"`
+}
+
+type PlayerCountsPacket struct {
+	RequestID string `json:"rid"`
+	Type      string `json:"type"`
+
+	Counts stores.PlayerCounts `json:"counts"`
+}
+
 type CreatePacket struct {
 	RequestID string `json:"rid"`
 	Type      string `json:"type"`
@@ -62,6 +75,18 @@ type JoinPacket struct {
 
 	Lobby    string `json:"lobby"`
 	Password string `json:"password"`
+}
+
+type JoinOrCreatePacket struct {
+	Filter string `json:"filter"`
+
+	RequestID string `json:"rid"`
+	Type      string `json:"type"`
+
+	CodeFormat  string         `json:"codeFormat"`
+	MaxPlayers  *int           `json:"maxPlayers"`
+	CustomData  map[string]any `json:"customData"`
+	CanUpdateBy string         `json:"canUpdateBy"`
 }
 
 type JoinedPacket struct {

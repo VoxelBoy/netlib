@@ -1,3 +1,4 @@
+import { strict as assert } from 'assert'
 import { After, DataTable, Given, Then, When } from '@cucumber/cucumber'
 import { World } from '../world'
 
@@ -191,6 +192,28 @@ When('{string} creates a lobby with these settings:', async function (this: Worl
   }
   const settings = JSON.parse(settingsBlob)
   await player.network.create(settings)
+})
+
+When('{string} joins or creates a lobby with these settings:', async function (this: World, playerName: string, settingsBlob: string) {
+  const player = this.players.get(playerName)
+  if (player == null) {
+    throw new Error('no such player')
+  }
+  const settings = JSON.parse(settingsBlob)
+  await player.network.joinOrCreate(settings)
+})
+
+When('{string} join or create simultaneously with a maximum of {int} players', async function (this: World, playerNamesRaw: string, maxPlayers: number) {
+  await Promise.all(playerNamesRaw.split(',').map(async playerName => {
+    const player = this.players.get(playerName.trim())
+    if (player == null) {
+      throw new Error('no such player')
+    }
+    const lobby = await player.network.joinOrCreate({ maxPlayers })
+    if (lobby === undefined || lobby.code !== player.network.currentLobby) {
+      throw new Error('join-or-create did not return the current lobby')
+    }
+  }))
 })
 
 When('{string} connects to the lobby {string}', async function (this: World, playerName: string, lobbyCode: string) {
@@ -489,4 +512,31 @@ Then('{string} failed to join the lobby', function (playerName: string) {
   if (player.network.currentLobby !== undefined) {
     throw new Error(`player is in lobby ${player.network.currentLobby as string}`)
   }
+})
+
+Then('{string} should see {int} players online and {int} in a lobby', async function (this: World, playerName: string, online: number, inLobby: number) {
+  const player = this.players.get(playerName)
+  if (player == null) {
+    throw new Error('no such player')
+  }
+  const counts = await player.network.getPlayerCounts()
+  if (counts.online !== online || counts.inLobby !== inLobby) {
+    throw new Error(`expected ${online} online and ${inLobby} in a lobby but got ${JSON.stringify(counts)}`)
+  }
+})
+
+Then('{string} should see {int} players online and {int} in a lobby matching {string}', async function (this: World, playerName: string, online: number, inLobby: number, filter: string) {
+  const player = this.players.get(playerName)
+  if (player == null) {
+    throw new Error('no such player')
+  }
+  assert.deepEqual(await player.network.getPlayerCounts(JSON.parse(filter)), { online, inLobby })
+})
+
+Then('{string} should reject player counts matching {string}', async function (this: World, playerName: string, filter: string) {
+  const player = this.players.get(playerName)
+  if (player == null) {
+    throw new Error('no such player')
+  }
+  await assert.rejects(player.network.getPlayerCounts(JSON.parse(filter)), /invalid filter/)
 })

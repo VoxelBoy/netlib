@@ -38,6 +38,36 @@ interface LobbyOptions {
 ##### `join(code: string, password?: string): Promise<void>`
 Joins an existing lobby.
 
+##### `joinOrCreate(settings?: JoinOrCreateSettings): Promise<LobbyListEntry | undefined>`
+Joins a random public, password-free, nonempty lobby with available capacity for this game, or creates one atomically. Simultaneous join-or-create requests share lobbies without exceeding their capacity.
+
+An existing lobby must contain at least one connected session with a heartbeat in the last 90 seconds. Lobbies containing only disconnected, expired, or missing sessions are skipped. Lobby age alone does not indicate whether its players are active; use a `createdAt` filter if matchmaking should also limit lobby age.
+
+```typescript
+interface JoinOrCreateSettings extends Omit<LobbySettings, 'public' | 'password'> {
+  filter?: object;
+}
+
+const lobby = await network.joinOrCreate({
+  filter: { mode: "teams" },
+  customData: { mode: "teams" },
+  maxPlayers: 4
+});
+```
+
+Accepts the same settings as `create()`, except `public` and `password`, plus an optional `filter`.
+
+- `filter`: Selects existing lobbies using the same fields and MongoDB-style operators as `list()`. Invalid filters reject the request.
+- `codeFormat`, `maxPlayers`, `customData`, `canUpdateBy`: Apply only when creating a lobby. Defaults match `create()`.
+
+Filters use `code`, `playerCount`, `createdAt`, `updatedAt`, and `latency` for lobby properties. Other fields refer to custom data. Latency is estimated from the joining player's location.
+
+If no lobby matches, creates a public, password-free lobby. Filter values are not copied into its custom data. Set `customData` explicitly, as shown above.
+
+Returns `undefined` when the network is closing or not ready. Existing lobby and connection events work as usual.
+
+Requires signaling server support. Older servers return an error.
+
 ##### `leave(): Promise<void>`
 Leaves the current lobby without closing the network.
 
@@ -58,6 +88,39 @@ interface Lobby {
   maxPlayers: number;    // Player limit
 }
 ```
+
+#### Player Counts
+
+##### `getPlayerCounts(filter?: object): Promise<PlayerCounts>`
+Returns a server-side snapshot of connected Netlib sessions for this instance's game ID.
+Call after the `ready` event.
+
+```typescript
+interface PlayerCounts {
+  online: number;   // Connected sessions, including yourself
+  inLobby: number;  // Connected sessions in public or private lobbies
+}
+
+const { online } = await network.getPlayerCounts();
+label.textContent = `${online} players online`;
+```
+
+The optional filter uses the same MongoDB-style syntax as `list()`, including
+lobby custom data fields. It applies only to `inLobby`; `online` always counts all
+connected sessions for the game. Matching private lobbies are included, and each
+connected session is counted at most once.
+
+```typescript
+const { inLobby } = await network.getPlayerCounts({ kind: 'ranked' });
+```
+
+Omitting the filter or passing `{}` counts membership in any lobby. Invalid filters
+reject the promise.
+
+`inLobby` is a subset of `online`. Counts represent sessions, not unique people;
+multiple tabs can count separately. Disconnects are reflected once detected by the
+server. Players outside a lobby are not necessarily searching for a game.
+The promise rejects if the network is not ready, is closing, or the request fails.
 
 #### Communication
 

@@ -122,7 +122,7 @@ Feature: Lobby Discovery
       | code          |
       | 2qva9vyurwbbl |
 
-  Scenario: List empty lobbies
+  Scenario: Don't list lobbies everyone left
     Given "green" creates a network for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
     And "blue" is connected as "h5yzwyizlwao" and ready for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
 
@@ -142,9 +142,7 @@ Feature: Lobby Discovery
       """json
       {}
       """
-    Then "green" should have received only these lobbies:
-      | code | playerCount |
-      | HC6Y | 0           |
+    Then "green" should receive 0 lobbies
 
   Scenario: Filter created lobbies on customData
     Given "green" creates a network for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"

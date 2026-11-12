@@ -517,6 +517,9 @@ func (s *PostgresStore) ListLobbies(ctx context.Context, game string, country, r
 			FROM lobbies
 			WHERE game = $1
 			  AND public = true
+			  -- Downstream: a lobby everyone left stays for LobbyCleanThreshold (a day) so its code isn't reused, but
+			  -- nobody is there to answer a join, so it isn't listed. Joining it by its code still works.
+			  AND COALESCE(ARRAY_LENGTH(peers, 1), 0) > 0
 		)
 		SELECT *
 		FROM game_lobbies

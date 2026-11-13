@@ -9,8 +9,8 @@ After(async function (this: World) {
   this.players.clear()
 })
 
-async function playerIsConnectedAndReadyForGame (this: World, playerName: string, peerID: string, gameID: string, country?: string, region?: string): Promise<void> {
-  const player = await this.createPlayer(playerName, gameID, country, region)
+Given('{string} is connected as {string} and ready for game {string}', async function (this: World, playerName: string, peerID: string, gameID: string) {
+  const player = await this.createPlayer(playerName, gameID)
   const event = await player.waitForEvent('ready')
   if (event == null) {
     throw new Error(`unable to add player ${playerName} to network`)
@@ -18,14 +18,6 @@ async function playerIsConnectedAndReadyForGame (this: World, playerName: string
   if (player.network.id !== peerID) {
     throw new Error(`expected peer ID ${peerID} but got ${player.network.id}`)
   }
-}
-
-Given('{string} is connected as {string} and ready for game {string}', async function (this: World, playerName: string, peerID: string, gameID: string) {
-  await playerIsConnectedAndReadyForGame.call(this, playerName, peerID, gameID)
-})
-
-Given('{string} is connected as {string} with country,region as {string},{string} and ready for game {string}', async function (this: World, playerName: string, peerID: string, country: string, region: string, gameID: string) {
-  await playerIsConnectedAndReadyForGame.call(this, playerName, peerID, gameID, country, region)
 })
 
 async function areJoinedInALobby (this: World, playerNamesRaw: string, publc: boolean): Promise<void> {
@@ -304,6 +296,19 @@ When('{string} requests lobbies with:', async function (this: World, playerName:
   player.lastReceivedLobbies = lobbies
 })
 
+Then('{string} receives connected events for {string} and {string} in either order', async function (this: World, playerName: string, first: string, second: string) {
+  const player = this.players.get(playerName)
+  const firstPeer = this.players.get(first)
+  const secondPeer = this.players.get(second)
+  if (player == null || firstPeer == null || secondPeer == null) {
+    throw new Error('no such player')
+  }
+  const firstEvent = await player.waitForEvent('connected')
+  const secondEvent = await player.waitForEvent('connected')
+  const peerIDs = new Set([firstEvent.eventPayload[0].id, secondEvent.eventPayload[0].id])
+  assert.deepEqual(peerIDs, new Set([firstPeer.network.id, secondPeer.network.id]))
+})
+
 Then('{string} receives the network event {string}', async function (this: World, playerName: string, eventName: string) {
   const player = this.players.get(playerName)
   if (player == null) {
@@ -531,12 +536,4 @@ Then('{string} should see {int} players online and {int} in a lobby matching {st
     throw new Error('no such player')
   }
   assert.deepEqual(await player.network.getPlayerCounts(JSON.parse(filter)), { online, inLobby })
-})
-
-Then('{string} should reject player counts matching {string}', async function (this: World, playerName: string, filter: string) {
-  const player = this.players.get(playerName)
-  if (player == null) {
-    throw new Error('no such player')
-  }
-  await assert.rejects(player.network.getPlayerCounts(JSON.parse(filter)), /invalid filter/)
 })

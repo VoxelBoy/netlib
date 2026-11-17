@@ -144,7 +144,17 @@ export default class Network extends EventEmitter<NetworkListeners> {
   }
 
   close (reason?: string): void {
-    if (this._closing || this.signaling.receivedID === undefined) {
+    if (this._closing) {
+      return
+    }
+    if (this.signaling.receivedID === undefined) {
+      // Never welcomed: nothing to tell the server, but stop connecting (it otherwise reconnects up to 42 times, and a
+      // late connection stays open with no lobby).
+      this._closing = true
+      this.signaling.close()
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('unload', this.unloadListener)
+      }
       return
     }
     this._closing = true

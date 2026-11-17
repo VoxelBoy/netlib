@@ -118,6 +118,10 @@ export default class Signaling extends EventEmitter<SignalingListeners> {
     void this.event('signaling', 'attempt-reconnect')
     this.reconnecting = true
     setTimeout(() => {
+      // Closed while it waited: no new socket.
+      if (this.network.closing) {
+        return
+      }
       this.ws = this.connect()
     }, Math.random() * 100 * this.reconnectAttempt)
     this.reconnectAttempt += 1

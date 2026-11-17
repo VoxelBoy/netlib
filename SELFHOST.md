@@ -22,7 +22,9 @@ the lobby listing (2026-11-13: upstream lists them, empty, for the day it keeps 
 Loot Hole builds already out joined them; a code still joins one; `lobbies.feature`
 changed with it), and add a standalone image.
 These preserve the already-tested Loot Hole self-hosting behavior. `TURN_SECRET`,
-`TURN_URLS` and `ALLOWED_ORIGINS` are runtime environment variables; no service
+`TURN_URLS`, `ALLOWED_ORIGINS` (exact origins, or `https://*.example.com` for https on that host and every
+host under it, as a portal's per-game frames need), `SIGNALING_MAX_CONNECTIONS` and `SIGNALING_MAX_PER_ADDRESS`
+(the signaling caps: 128 and 16 when unset) are runtime environment variables; no service
 secrets, certificates, game source, database contents or deployment credentials
 belong in this public fork. The trusted proxy must overwrite `X-Real-IP` and the
 signaling listener must not be directly exposed.

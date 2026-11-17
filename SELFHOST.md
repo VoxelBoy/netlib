@@ -2,7 +2,8 @@
 
 This is VoxelBoy's small server fork of [poki/netlib](https://github.com/poki/netlib).
 The upstream ISC license, Go module path and `@poki/netlib` package name are
-retained. The browser client source is unchanged; the game consumes this fork
+retained. The browser client differs from upstream in one fix (`cc628cf`, 2026-11-17): `Network.close()` stops a
+connection the server never welcomed, which upstream left reconnecting up to 42 times. The game consumes this fork
 directly through a Git dependency pinned to an immutable commit. `prepare` uses
 `npm run build`, so a Git install produces the main bundle, type declarations and
 legacy browser bundle without a global Yarn installation. The committed npm lock

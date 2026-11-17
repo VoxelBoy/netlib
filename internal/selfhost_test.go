@@ -8,6 +8,13 @@ import (
 )
 
 func signalingRequest(origin, ip string) *http.Request {
+	r := probeRequest(origin, ip)
+	r.Header.Set("Upgrade", "websocket")
+	return r
+}
+
+// The browser's plain request asking whether a connection would be turned away.
+func probeRequest(origin, ip string) *http.Request {
 	r := httptest.NewRequest("GET", "/v0/signaling", nil)
 	r.Header.Set("Origin", origin)
 	r.Header.Set("X-Real-IP", ip)
@@ -106,6 +113,41 @@ func TestSelfhostCapsFromEnvironment(t *testing.T) {
 	handler.ServeHTTP(w, signalingRequest(origin, "192.0.2.3"))
 	if w.Code != http.StatusTooManyRequests {
 		t.Fatal("total cap from the environment not enforced")
+	}
+	close(release)
+	wg.Wait()
+}
+
+func TestSelfhostProbeSaysWhetherAConnectionWouldBeTurnedAway(t *testing.T) {
+	t.Setenv("ALLOWED_ORIGINS", "https://*.crazygames.com")
+	t.Setenv("SIGNALING_MAX_CONNECTIONS", "1")
+	entered := make(chan struct{}, 1)
+	release := make(chan struct{})
+	handler := SelfhostGuard(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { entered <- struct{}{}; <-release }))
+	origin := "https://loot-hole-hjh.game-files.crazygames.com"
+	probe := func(origin string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, probeRequest(origin, "192.0.2.9"))
+		return w
+	}
+	w := probe(origin)
+	if w.Code != http.StatusNoContent || w.Header().Get("Access-Control-Allow-Origin") != origin {
+		t.Fatalf("room to spare: %d %q", w.Code, w.Header().Get("Access-Control-Allow-Origin"))
+	}
+	// Probes take no place: the one connection allowed still gets in.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		handler.ServeHTTP(httptest.NewRecorder(), signalingRequest(origin, "192.0.2.1"))
+	}()
+	<-entered
+	w = probe(origin)
+	if w.Code != http.StatusTooManyRequests || w.Header().Get("Access-Control-Allow-Origin") != origin {
+		t.Fatalf("full: %d %q", w.Code, w.Header().Get("Access-Control-Allow-Origin"))
+	}
+	if w = probe("https://another.example"); w.Code != http.StatusForbidden || w.Header().Get("Access-Control-Allow-Origin") != "" {
+		t.Fatalf("another origin: %d %q", w.Code, w.Header().Get("Access-Control-Allow-Origin"))
 	}
 	close(release)
 	wg.Wait()

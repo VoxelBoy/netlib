@@ -84,10 +84,23 @@ func SelfhostGuard(next http.Handler) http.Handler {
 			return
 		}
 		ip := r.Header.Get("X-Real-IP")
+		// A browser can't read why a WebSocket was turned away, so a plain request here asks whether this one would be:
+		// 429 when the caps are reached, 204 when not (readable from the allowed origin, and nothing counted).
+		probe := !strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
+		if probe {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Add("Vary", "Origin")
+			w.Header().Set("Cache-Control", "no-store")
+		}
 		mu.Lock()
 		if total >= maxTotal || counts[ip] >= maxPerAddress {
 			mu.Unlock()
 			http.Error(w, "connection limit", http.StatusTooManyRequests)
+			return
+		}
+		if probe {
+			mu.Unlock()
+			w.WriteHeader(http.StatusNoContent)
 			return
 		}
 		total++

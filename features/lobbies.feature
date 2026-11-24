@@ -73,6 +73,9 @@ Feature: Lobby Discovery
 
   Scenario: Filter on playerCount
     Given "green" is connected as "1u8fw4aph5ypt" and ready for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
+    And these peers exist:
+      | peer  | game                                 | disconnected | last_seen |
+      | peer0 | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | false        | now       |
     And these lobbies exist:
       | code          | game                                 | playerCount | public |
       | 0qva9vyurwbbl | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | 1           | true   |
@@ -103,6 +106,9 @@ Feature: Lobby Discovery
 
   Scenario: Filter on customData
     Given "green" is connected as "1u8fw4aph5ypt" and ready for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
+    And these peers exist:
+      | peer  | game                                 | disconnected | last_seen |
+      | peer0 | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | false        | now       |
     And these lobbies exist:
       | code          | game                                 | playerCount | custom_data        | public | created_at |
       | 0qva9vyurwbbl | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | 1           | {"map": "de_nuke"} | true   | 2020-01-01 |
@@ -144,10 +150,39 @@ Feature: Lobby Discovery
       """
     Then "green" should receive 0 lobbies
 
+  Scenario Outline: Don't list lobbies without a connected member
+    Given "green" is connected as "1u8fw4aph5ypt" and ready for game "4307bd86-e1df-41b8-b9df-e22afcf084bd"
+    And these peers exist:
+      | peer         | game                                 | disconnected | last_seen            |
+      | disconnected | 4307bd86-e1df-41b8-b9df-e22afcf084bd | true         | now                  |
+      | expired      | 4307bd86-e1df-41b8-b9df-e22afcf084bd | false        | 2000-01-01T00:00:00Z |
+      | wrong-game   | 123e4567-e89b-12d3-a456-426614174000 | false        | now                  |
+      | live         | 4307bd86-e1df-41b8-b9df-e22afcf084bd | false        | now                  |
+    And these lobbies exist:
+      | code          | game                                 | peers   | public |
+      | 0qva9vyurwbbl | 4307bd86-e1df-41b8-b9df-e22afcf084bd | <peers> | true   |
+
+    When "green" requests lobbies with:
+      """json
+      {}
+      """
+    Then "green" should receive <count> lobbies
+
+    Examples:
+      | peers               | count |
+      | {disconnected}      | 0     |
+      | {expired}           | 0     |
+      | {wrong-game}        | 0     |
+      | {missing}           | 0     |
+      | {disconnected,live} | 1     |
+
   Scenario: Filter created lobbies on customData
     Given "green" creates a network for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
     And "blue" is connected as "h5yzwyizlwao" and ready for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
 
+    And these peers exist:
+      | peer  | game                                 | disconnected | last_seen |
+      | peer0 | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | false        | now       |
     And these lobbies exist:
       | code         | game                                 | playerCount | public | custom_data        |
       | 1qva9vyurwbb | 54fa57d5-b4bd-401d-981d-2c13de99be27 | 9           | true   | {"map": "de_nuke"} |
@@ -178,6 +213,9 @@ Feature: Lobby Discovery
 
   Scenario: Sort lobbies with a custom order
     Given "green" is connected as "1u8fw4aph5ypt" and ready for game "f666036d-d9e1-4d70-b0c3-4a68b24a9884"
+    And these peers exist:
+      | peer  | game                                 | disconnected | last_seen |
+      | peer0 | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | false        | now       |
     And these lobbies exist:
       | code         | game                                 | playerCount | public | created_at |
       | 1qva9vyurwbb | f666036d-d9e1-4d70-b0c3-4a68b24a9884 | 1           | true   | 2020-01-03 |

@@ -477,7 +477,7 @@ func (s *PostgresStore) ListLobbies(ctx context.Context, game, filter, sort stri
 		limit = 50
 	}
 
-	preValues := []any{game, limit}
+	preValues := []any{game, limit, util.NowUTC(ctx).Add(-DefaultPeerTimeout)}
 
 	where, values, err := s.filterConverter.Convert([]byte(filter), len(preValues)+1)
 	if err != nil {
@@ -520,9 +520,15 @@ func (s *PostgresStore) ListLobbies(ctx context.Context, game, filter, sort stri
 			FROM lobbies
 			WHERE game = $1
 			  AND public = true
-			  -- Downstream: a lobby everyone left stays for LobbyCleanThreshold (a day) so its code isn't reused, but
-			  -- nobody is there to answer a join, so it isn't listed. Joining it by its code still works.
-			  AND COALESCE(ARRAY_LENGTH(peers, 1), 0) > 0
+			  -- Downstream: only lobbies with a member still connected, as join-or-create picks them. A lobby everyone
+			  -- left stays for LobbyCleanThreshold (a day) so its code isn't reused, and one whose members all lost
+			  -- their connection (a browser killed or crashed) keeps them until DefaultPeerTimeout, in case they
+			  -- reconnect: nobody is there to answer a join, so neither is listed. Joining one by its code still works.
+			  AND EXISTS (
+				SELECT 1 FROM peers p
+				WHERE p.game = $1 AND p.peer = ANY(lobbies.peers)
+				AND p.disconnected = FALSE AND p.last_seen >= $3
+			  )
 		)
 		SELECT *
 		FROM game_lobbies

@@ -19,10 +19,11 @@ pins the build dependencies; the upstream Yarn lock is retained for merging.
 The downstream commits replace Cloudflare credential generation with local coturn
 TURN REST credentials, allow an array of TURN URLs, restrict signaling to the game's
 UUID and configured origins, bound connections and packet rates, require hello
-before credentials, discard client analytics events, leave lobbies everyone left out of
-the lobby listing (2026-11-13: upstream lists them, empty, for the day it keeps them, and
-Loot Hole builds already out joined them; a code still joins one; `lobbies.feature`
-changed with it), and add a standalone image.
+before credentials, discard client analytics events, leave lobbies with no connected member out
+of the lobby listing (2026-11-13: lobbies everyone left, which upstream lists, empty, for the day it keeps
+them, and Loot Hole builds already out joined them; 2026-11-24: lobbies whose members all lost their
+connection, a browser killed or crashed, listed until the peer timeout; the same test join-or-create makes;
+a code still joins one; `lobbies.feature` covers both), and add a standalone image.
 These preserve the already-tested Loot Hole self-hosting behavior. `TURN_SECRET`,
 `TURN_URLS`, `ALLOWED_ORIGINS` (exact origins, or `https://*.example.com` for https on that host and every
 host under it, as a portal's per-game frames need), `SIGNALING_MAX_CONNECTIONS` and `SIGNALING_MAX_PER_ADDRESS`

@@ -42,9 +42,12 @@ export default class Network extends EventEmitter<NetworkListeners> {
     this.signaling = new Signaling(this, this.peers, signalingURL)
     this.credentials = new Credentials(this.signaling)
 
+    // Leaves as the page goes (closed, reloaded, navigated away). pagehide, not unload: Chrome no longer runs unload
+    // listeners (its permissions policy refuses them) and recommends pagehide instead. It also fires as a page enters the
+    // back/forward cache: the lobby is left then too, as on any other way out.
     this.unloadListener = () => this.close()
     if (typeof window !== 'undefined') {
-      window.addEventListener('unload', this.unloadListener)
+      window.addEventListener('pagehide', this.unloadListener)
     }
   }
 
@@ -153,7 +156,7 @@ export default class Network extends EventEmitter<NetworkListeners> {
       this._closing = true
       this.signaling.close()
       if (typeof window !== 'undefined') {
-        window.removeEventListener('unload', this.unloadListener)
+        window.removeEventListener('pagehide', this.unloadListener)
       }
       return
     }
@@ -172,7 +175,7 @@ export default class Network extends EventEmitter<NetworkListeners> {
     this.signaling.close()
 
     if (typeof window !== 'undefined') {
-      window.removeEventListener('unload', this.unloadListener)
+      window.removeEventListener('pagehide', this.unloadListener)
     }
   }
 

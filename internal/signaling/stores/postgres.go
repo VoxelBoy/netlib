@@ -213,6 +213,13 @@ func (s *PostgresStore) CreateLobby(ctx context.Context, game, lobbyCode, peerID
 	return nil
 }
 
+// seatedPeer is the condition on peers p for a member holding a seat: connected (seen since parameter $seen,
+// DefaultPeerTimeout ago), or disconnected so lately it may be reconnecting (since parameter $gone, SeatGrace ago). One
+// whose browser was killed or crashed stays in the lobby until DefaultPeerTimeout, but frees its seat after SeatGrace.
+func seatedPeer(seen, gone int) string {
+	return fmt.Sprintf("((p.disconnected = FALSE AND p.last_seen >= $%d) OR (p.disconnected = TRUE AND p.updated_at >= $%d))", seen, gone)
+}
+
 func (s *PostgresStore) JoinLobby(ctx context.Context, game, lobbyCode, peerID, password string) ([]string, error) {
 	if len(peerID) > 20 {
 		logger := logging.GetLogger(ctx)
@@ -250,7 +257,18 @@ func (s *PostgresStore) JoinLobby(ctx context.Context, game, lobbyCode, peerID, 
 	}
 
 	if maxPlayers > 0 && len(peerlist) >= maxPlayers {
-		return nil, ErrLobbyIsFull
+		// Only members still connected (or just disconnected, reconnecting: SeatGrace) hold a seat.
+		var seated int
+		err = tx.QueryRow(ctx, `
+			SELECT count(*) FROM peers p
+			WHERE p.game = $1 AND p.peer = ANY($2)
+			AND `+seatedPeer(3, 4), game, peerlist, now.Add(-DefaultPeerTimeout), now.Add(-SeatGrace)).Scan(&seated)
+		if err != nil {
+			return nil, err
+		}
+		if seated >= maxPlayers {
+			return nil, ErrLobbyIsFull
+		}
 	}
 
 	if slices.Contains(peerlist, peerID) {
@@ -285,7 +303,7 @@ func (s *PostgresStore) JoinOrCreateLobby(ctx context.Context, game, peerID, lob
 	if lobbyFilter == "" {
 		lobbyFilter = "{}"
 	}
-	where, values, err := s.filterConverter.Convert([]byte(lobbyFilter), 3)
+	where, values, err := s.filterConverter.Convert([]byte(lobbyFilter), 4)
 	if err != nil {
 		return "", nil, false, fmt.Errorf("invalid filter: %w", err)
 	}
@@ -327,7 +345,11 @@ func (s *PostgresStore) JoinOrCreateLobby(ctx context.Context, game, peerID, lob
 		WHERE public = true
 		AND password IS NULL
 		AND COALESCE(ARRAY_LENGTH(peers, 1), 0) > 0
-		AND (max_players = 0 OR ARRAY_LENGTH(peers, 1) < max_players)
+		AND (max_players = 0 OR (
+			SELECT count(*) FROM peers p
+			WHERE p.game = $1 AND p.peer = ANY(game_lobbies.peers)
+			AND `+seatedPeer(2, 3)+`
+		) < max_players)
 		AND EXISTS (
 			SELECT 1 FROM peers p
 			WHERE p.game = $1 AND p.peer = ANY(game_lobbies.peers)
@@ -337,7 +359,7 @@ func (s *PostgresStore) JoinOrCreateLobby(ctx context.Context, game, peerID, lob
 		ORDER BY RANDOM()
 		LIMIT 1
 		FOR UPDATE
-	`, append([]any{game, now.Add(-DefaultPeerTimeout)}, values...)...).Scan(&lobbyCode, &peerlist)
+	`, append([]any{game, now.Add(-DefaultPeerTimeout), now.Add(-SeatGrace)}, values...)...).Scan(&lobbyCode, &peerlist)
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return "", nil, false, err
 	}

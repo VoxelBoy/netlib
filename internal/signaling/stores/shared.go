@@ -16,6 +16,11 @@ var ErrLobbyIsFull = errors.New("lobby is full")
 
 const DefaultPeerTimeout = 90 * time.Second
 
+// SeatGrace is how long a member whose signaling connection closed keeps its seat in a full lobby: long enough for the
+// client's own reconnect (it tries again within moments), short of DefaultPeerTimeout, so a member whose browser was
+// killed or crashed stops turning players away from a lobby the others still play in.
+const SeatGrace = 15 * time.Second
+
 type SubscriptionCallback func(context.Context, []byte)
 
 type LobbyOptions struct {
